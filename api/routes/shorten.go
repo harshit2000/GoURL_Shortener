@@ -2,19 +2,15 @@ package routes
 
 import (
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/asaskevich/govalidator"
+	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/harshit2000/GoURL_Shortener/database"
-)
-package helpers
-
-import (
-	"strings"
-	"time"
-	"os"
-	"github.com/gofiber/fiber/v2"
-	"github.com/harshit2000/GoURL_Shortener/database"
+	"github.com/harshit2000/GoURL_Shortener/helpers"
 )
 
 type request struct {
@@ -44,16 +40,16 @@ func ShortenURL(c *fiber.Ctx) error {
 	r2 := database.CreateClient(1)
 	defer r2.Close()
 	val, err := r2.Get(database.Ctx, c.IP()).Result()
-	if err == redis.Nil{
-		_ = r2.Set(database.Ctx, c.IP, os.Getenv("API_QUOTA"), 30*60*time.Second).Err()
-	} else{
+	if err == redis.Nil {
+		_ = r2.Set(database.Ctx, c.IP(), os.Getenv("API_QUOTA"), 30*60*time.Second).Err()
+	} else {
 		val, _ = r2.Get(database.Ctx, c.IP()).Result()
 		valInt, _ := strconv.Atoi(val)
 		// we will increment by 1 so thats why it is 0
-		if valInt <= 0{
+		if valInt <= 0 {
 			limit, _ := r2.TTL(database.Ctx, c.IP()).Result()
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"error": "rate limit exceeded",
+				"error":            "rate limit exceeded",
 				"rate_limit_reset": limit / time.Nanosecond / time.Second,
 			})
 		}
@@ -68,19 +64,18 @@ func ShortenURL(c *fiber.Ctx) error {
 	//localhost check : for domain error
 
 	if !helpers.RemoveDomainError(body.URL) {
-		return c.Status(fibre.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service is down :) "})
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service is down :) "})
 	}
 
 	// enforce HTTPS, SSL connection
 
-	body.URL = helpers.EnforceHTTPS(body.URL)
+	body.URL = helpers.EnforceHTTP(body.URL)
 
+	var id string
 
-	var id string 
-	
-	if body.CustomShort == ""{
+	if body.CustomShort == "" {
 		id = uuid.New().String()[:6]
-	} else{
+	} else {
 		id = body.CustomShort
 	}
 
@@ -88,43 +83,42 @@ func ShortenURL(c *fiber.Ctx) error {
 	defer r.Close()
 
 	val, _ = r.Get(database.Ctx, id).Result()
-	if val!= ""{
+	if val != "" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "URL CustomShort is already in use",
 		})
 	}
 
-	if body.Expiry == 0{
+	if body.Expiry == 0 {
 		body.Expiry = 24
 	}
 
 	err = r.Set(database.Ctx, id, body.URL, body.Expiry*3600*time.Second).Err()
-	if err!= nil {
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Unable to connect to Server",
 		})
 	}
 
 	resp := response{
-		URL:						body.URL,
-		CustomShort:				"",
-		Expiry:						body.Expiry,
-		XRateRemaining:				10,
-		XRateLimitReset: 			30
+		URL:             body.URL,
+		CustomShort:     "",
+		Expiry:          body.Expiry,
+		XRateRemaining:  10,
+		XRateLimitReset: 30,
 	}
 
 	r2.Decr(database.Ctx, c.IP())
 
 	val, _ = r2.Get(database.Ctx, c.IP()).Result()
-	resp.RateRemaining, _ = strconv.Atoi(val)
+	resp.XRateRemaining, _ = strconv.Atoi(val)
 
 	ttl, _ := r2.TTL(database.Ctx, c.IP()).Result()
-	
-	resp.XRateLimitReset  = ttl / time.Nanosecond /  time.Minute
+
+	resp.XRateLimitReset = ttl / time.Nanosecond / time.Minute
 
 	resp.CustomShort = os.Getenv("DOMAIN") + "/" + id
-	
-	return c.Status(fibebr.StatusOK).JSON(resp)
-	
+
+	return c.Status(fiber.StatusOK).JSON(resp)
 
 }

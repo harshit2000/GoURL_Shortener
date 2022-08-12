@@ -1,8 +1,4 @@
-package routes
 package main
-package helpers
-package database
-
 
 import (
 	"fmt"
@@ -11,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/harshit2000/GoURL_Shortener/routes"
 	"github.com/joho/godotenv"
 )
 
