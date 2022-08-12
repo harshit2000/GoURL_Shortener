@@ -1,6 +1,9 @@
 package routes
 
 import (
+	"os"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/harshit2000/GoURL_Shortener/database"
 )
@@ -44,7 +47,7 @@ func ShortenURL(c *fiber.Ctx) error {
 	if err == redis.Nil{
 		_ = r2.Set(database.Ctx, c.IP, os.Getenv("API_QUOTA"), 30*60*time.Second).Err()
 	} else{
-		val, _ = r2.Get(database.Ctx, c.IP.Result())
+		val, _ = r2.Get(database.Ctx, c.IP()).Result()
 		valInt, _ := strconv.Atoi(val)
 		// we will increment by 1 so thats why it is 0
 		if valInt <= 0{
@@ -102,8 +105,26 @@ func ShortenURL(c *fiber.Ctx) error {
 		})
 	}
 
+	resp := response{
+		URL:						body.URL,
+		CustomShort:				"",
+		Expiry:						body.Expiry,
+		XRateRemaining:				10,
+		XRateLimitReset: 			30
+	}
 
 	r2.Decr(database.Ctx, c.IP())
 
+	val, _ = r2.Get(database.Ctx, c.IP()).Result()
+	resp.RateRemaining, _ = strconv.Atoi(val)
+
+	ttl, _ := r2.TTL(database.Ctx, c.IP()).Result()
+	
+	resp.XRateLimitReset  = ttl / time.Nanosecond /  time.Minute
+
+	resp.CustomShort = os.Getenv("DOMAIN") + "/" + id
+	
+	return c.Status(fibebr.StatusOK).JSON(resp)
+	
 
 }
