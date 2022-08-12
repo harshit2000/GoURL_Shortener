@@ -1,19 +1,17 @@
 package routes
 
 import (
-	"time"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/harshit2000/GoURL_Shortener/database"
 )
 package helpers
 
 import (
+	"strings"
 	"time"
 	"os"
 	"github.com/gofiber/fiber/v2"
 	"github.com/harshit2000/GoURL_Shortener/database"
-
 )
 
 type request struct {
@@ -74,7 +72,38 @@ func ShortenURL(c *fiber.Ctx) error {
 
 	body.URL = helpers.EnforceHTTPS(body.URL)
 
-	r2.Decr(database.Ctx, c.IP())
+
+	var id string 
 	
+	if body.CustomShort == ""{
+		id = uuid.New().String()[:6]
+	} else{
+		id = body.CustomShort
+	}
+
+	r := database.CreateClient(0)
+	defer r.Close()
+
+	val, _ = r.Get(database.Ctx, id).Result()
+	if val!= ""{
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "URL CustomShort is already in use",
+		})
+	}
+
+	if body.Expiry == 0{
+		body.Expiry = 24
+	}
+
+	err = r.Set(database.Ctx, id, body.URL, body.Expiry*3600*time.Second).Err()
+	if err!= nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Unable to connect to Server",
+		})
+	}
+
+
+	r2.Decr(database.Ctx, c.IP())
+
 
 }

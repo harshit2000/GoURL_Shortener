@@ -6,31 +6,29 @@ import (
 	"github.com/harshit2000/GoURL_Shortener/database"
 )
 
-
-func ResolveURL(c *fiber.Ctx) error{
+func ResolveURL(c *fiber.Ctx) error {
 
 	url := c.Params("url")
 	r := database.CreateClient(0)
 	defer r.Close()
 
-
 	value, err := r.Get(database.Ctx, url).Result()
-	if err == redis.Nil{
+	if err == redis.Nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error" : "Short Not Found"
+			"error": "Short Not Found",
 		})
-	}	else if err!= nil {
+	} else if err != nil {
 
-			c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Cannot connect to the DB Server",
-			})
-		}
+		c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Cannot connect to the DB Server",
+		})
+	}
 
-		rInr := database.CreateClient(1)
-		defer rInr.Close()
+	rInr := database.CreateClient(1)
+	defer rInr.Close()
 
-		_ = rInr.Incr(database.Ctx, "counter")
+	_ = rInr.Incr(database.Ctx, "counter")
 
-		return c.Redirect(value, 301)
+	return c.Redirect(value, 301)
 
 }
