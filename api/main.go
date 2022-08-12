@@ -1,5 +1,8 @@
-package main
 package routes
+package main
+package helpers
+package database
+
 
 import (
 	"fmt"
